@@ -1,13 +1,11 @@
 """
 ====================================================================
   🏆 BOT ĐUA TOP XẾP HẠNG TELEGRAM: @kiemtien6789_bot (TÀI KHOẢN 1)
-  🎯 Mục tiêu: Hoàn thành sớm nhất 10/10 tất cả nhiệm vụ mỗi ngày:
-      1. Cho ăn (10 lần boost + đào)
-      2. Mở rương (10 lần rương)
-      3. Câu hỏi (10/10 câu trắc nghiệm tự động trả lời đúng 100%)
-      4. Nhiệm vụ 1, 2, 3 (Monetag Ads 10 lần/ngày)
-      5. SAU KHI XONG HẾT ➔ Tự động bẻ khóa và nhập sạch toàn bộ GiftCode
-  🌙 Khi xong hết: Tự động ngủ đến 00:00 GMT+7 và thức dậy cày tiếp!
+  🎯 Mục tiêu: 
+      - Tự động nhận diện nhiệm vụ đã hoàn thành ➔ Bỏ qua ngay
+      - Không chờ đợi cooldown nếu đã làm đủ 10 lần
+      - Nhập sạch sẽ toàn bộ 26 GiftCode TelePet (~130,000 Xu)
+      - Ngủ đến 00:00 GMT+7 thức dậy cày tiếp ngày mới
 ====================================================================
 """
 
@@ -94,19 +92,19 @@ def do_feed_tasks():
     global progress
     if progress["feed_done"]:
         return
-    log("🦴", "Bắt đầu chuỗi Cho ăn (10 lần liên tục kèm Boost x2)...", Fore.CYAN)
+    log("🦴", "Kiểm tra nhiệm vụ Cho ăn...", Fore.CYAN)
     for i in range(progress["feed"], 10):
         api_call("tap_boost")
         time.sleep(1)
         res = api_call("tap")
         if res.get("ok"):
             progress["feed"] += 1
-            log("⚡", f"Cho ăn lần {progress['feed']}/10: +{res.get('earned', 0)} coin (Số dư: {res.get('coins'):,})", Fore.GREEN)
+            log("⚡", f"Cho ăn lần {progress['feed']}/10: +{res.get('earned', 0)} coin", Fore.GREEN)
         else:
             err = res.get("error", "")
-            if "hết" in err.lower() or "chờ" in err.lower():
-                progress["feed_done"] = True
-                break
+            log("ℹ️", f"Cho ăn: {err} ➔ Đánh dấu xong!", Fore.YELLOW)
+            progress["feed_done"] = True
+            break
         time.sleep(1.5)
     if progress["feed"] >= 10:
         progress["feed_done"] = True
@@ -115,17 +113,17 @@ def do_chest_tasks():
     global progress
     if progress["chest_done"]:
         return
-    log("📦", "Bắt đầu chuỗi Mở rương (10 lần liên tục)...", Fore.CYAN)
+    log("📦", "Kiểm tra nhiệm vụ Mở rương...", Fore.CYAN)
     for i in range(progress["chest"], 10):
         res = api_call("chest")
         if res.get("ok"):
             progress["chest"] += 1
-            log("🎁", f"Mở rương lần {progress['chest']}/10: +{res.get('earned', 0)} coin (Số dư: {res.get('coins'):,})", Fore.GREEN)
+            log("🎁", f"Mở rương lần {progress['chest']}/10: +{res.get('earned', 0)} coin", Fore.GREEN)
         else:
             err = res.get("error", "")
-            if "hết" in err.lower() or "chờ" in err.lower():
-                progress["chest_done"] = True
-                break
+            log("ℹ️", f"Mở rương: {err} ➔ Đánh dấu xong!", Fore.YELLOW)
+            progress["chest_done"] = True
+            break
         time.sleep(1.5)
     if progress["chest"] >= 10:
         progress["chest_done"] = True
@@ -143,12 +141,13 @@ def do_quiz_tasks():
     global progress
     if progress["quiz_done"]:
         return
-    log("❓", "Bắt đầu chuỗi Trả lời câu hỏi (10/10 câu chuẩn 100%)...", Fore.CYAN)
+    log("❓", "Kiểm tra nhiệm vụ Trả lời câu hỏi...", Fore.CYAN)
     for i in range(progress["quiz"], 10):
         q_res = api_call("quiz_get")
         if not q_res.get("ok"):
-            if "hết" in q_res.get("error", "").lower():
-                progress["quiz_done"] = True
+            err = q_res.get("error", "")
+            log("ℹ️", f"Câu hỏi: {err} ➔ Đánh dấu xong!", Fore.YELLOW)
+            progress["quiz_done"] = True
             break
         q_text = q_res.get("question", "")
         opts = q_res.get("options", [])
@@ -162,10 +161,11 @@ def do_quiz_tasks():
         a_res = api_call("quiz_answer", {"selected": selected_idx})
         if a_res.get("ok"):
             progress["quiz"] += 1
-            log("🧠", f"Câu hỏi {progress['quiz']}/10: '{q_text}' ➔ Chọn {opts[selected_idx]} ✅ (+{a_res.get('earned', 0)} coin)", Fore.GREEN)
+            log("🧠", f"Câu hỏi {progress['quiz']}/10: Chọn {opts[selected_idx]} ✅ (+{a_res.get('earned', 0)} coin)", Fore.GREEN)
         else:
-            if "hết" in a_res.get("error", "").lower():
-                progress["quiz_done"] = True
+            err = a_res.get("error", "")
+            log("ℹ️", f"Trả lời: {err} ➔ Đánh dấu xong!", Fore.YELLOW)
+            progress["quiz_done"] = True
             break
         time.sleep(1.5)
     if progress["quiz"] >= 10:
@@ -192,11 +192,14 @@ def do_monetag_tasks():
                 progress[done_key] = True
         else:
             err = res.get("error", "")
-            if "chờ" in err.lower() or "10 phút" in err.lower():
-                pass
-            elif "hết" in err.lower() or "tối đa" in err.lower():
+            # NẾU ĐÃ HẾT LƯỢT HOẶC ĐẠT TỐI ĐA ➔ ĐÁNH DẤU XONG NGAY LẬP TỨC
+            if "tối đa" in err.lower() or "hết" in err.lower() or "10 lần" in err.lower():
+                log("✅", f"{task_name}: Đã đạt tối đa 10/10 lần hôm nay ➔ Bỏ qua!", Fore.GREEN)
                 progress[done_key] = True
-        time.sleep(1.5)
+                progress[task_key] = 10
+            elif "chờ" in err.lower() or "10 phút" in err.lower():
+                log("⏳", f"{task_name}: Đang trong thời gian Cooldown.", Fore.LIGHTBLACK_EX)
+        time.sleep(1)
 
 def do_extra_smartlinks():
     for task in EXTRA_TASKS:

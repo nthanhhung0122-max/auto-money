@@ -14,9 +14,10 @@
 import time
 import random
 import requests
+import urllib.parse
+import re
 from datetime import datetime, timezone, timedelta
 from colorama import Fore, Style, init
-from giftcode_solver import auto_claim_and_redeem_giftcodes
 
 init(autoreset=True)
 
@@ -65,9 +66,13 @@ progress = {
     "giftcode_done": False,
 }
 
+web_session = requests.Session()
+WEB_USER = "hungzai_bot2026"
+WEB_PASS = "Pass123456@"
+
 def log(icon, msg, color=Fore.WHITE):
     t = datetime.now().strftime("%H:%M:%S")
-    print(f"[{t}] {icon} {color}{msg}{Style.RESET_ALL}")
+    print(f"[{t}] {icon} {color}{msg}{Style.RESET_ALL}", flush=True)
 
 def api_call(action, extra=None):
     payload = {"action": action, "init_data": INIT_DATA}
@@ -126,7 +131,7 @@ def do_chest_tasks():
         progress["chest_done"] = True
 
 def solve_math(q):
-    m = requests.utils.re.search(r"(\d+)\s*([\+\-\*])\s*(\d+)", q)
+    m = re.search(r"(\d+)\s*([\+\-\*])\s*(\d+)", q)
     if m:
         a, op, b = int(m.group(1)), m.group(2), int(m.group(3))
         if op == '+': return a + b
@@ -197,6 +202,99 @@ def do_extra_smartlinks():
     for task in EXTRA_TASKS:
         api_call(task)
         time.sleep(0.3)
+
+def init_web_account():
+    try:
+        r = web_session.post("https://kiemtienngay.us/login.php", data={"username": WEB_USER, "password": WEB_PASS}, timeout=8)
+        if "Tài khoản:" not in r.text and "Đăng xuất" not in r.text:
+            web_session.post("https://kiemtienngay.us/register.php", data={
+                "username": WEB_USER,
+                "password": WEB_PASS,
+                "confirm_password": WEB_PASS,
+                "referrer": ""
+            }, timeout=8)
+            web_session.post("https://kiemtienngay.us/login.php", data={"username": WEB_USER, "password": WEB_PASS}, timeout=8)
+        return True
+    except Exception as e:
+        log("❌", f"Lỗi đăng nhập web kiemtienngay.us: {e}", Fore.RED)
+        return False
+
+def auto_claim_and_redeem_giftcodes():
+    print(f"\n{Fore.MAGENTA}══════════════════════════════════════════════════════════════════{Style.RESET_ALL}")
+    log("🎁", "BẮT ĐẦU BẺ KHÓA & TỰ ĐỘNG NẠP GIFTCODE TELEPET VÀO VÍ...", Fore.YELLOW)
+    print(f"{Fore.MAGENTA}══════════════════════════════════════════════════════════════════{Style.RESET_ALL}")
+
+    if not init_web_account():
+        return 0
+
+    try:
+        r_home = web_session.get("https://kiemtienngay.us/index.php", timeout=8)
+        task_links = re.findall(r'href=[\'"]([^\'"]*giftcode\.php\?task_id=\d+)[\'"]', r_home.text)
+        task_ids = sorted(list(set([re.search(r'task_id=(\d+)', l).group(1) for l in task_links])), key=lambda x: int(x))
+    except Exception as e:
+        log("❌", f"Không lấy được danh sách task: {e}", Fore.RED)
+        return 0
+
+    log("📋", f"Tìm thấy {len(task_ids)} nhiệm vụ GiftCode. Đang tiến hành bẻ khóa và nhập tự động...", Fore.CYAN)
+
+    total_coins_earned = 0
+    success_count = 0
+
+    headers_telepet = {
+        'content-type': 'application/x-www-form-urlencoded;charset=UTF-8',
+        'origin': 'https://kien.kiemtienngay.us',
+        'referer': 'https://kien.kiemtienngay.us/public/nhiemvu.php',
+        'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+    }
+
+    for round_num in [1, 2]:
+        for tid in task_ids:
+            url = f"https://kiemtienngay.us/nbk222/giftcode.php?task_id={tid}"
+            try:
+                r = web_session.get(url, allow_redirects=False, timeout=8)
+                loc = r.headers.get("Location", "")
+                if not loc:
+                    continue
+
+                parsed = urllib.parse.urlparse(loc)
+                target_url = urllib.parse.parse_qs(parsed.query).get("url", [None])[0]
+                if not target_url:
+                    continue
+
+                headers_gift = {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'Referer': target_url
+                }
+                r_claim = web_session.post(target_url, data="confirm_gift=1", headers=headers_gift, timeout=8)
+                data = r_claim.json()
+
+                if data.get("status") == "ok":
+                    code = data.get("code")
+                    reward_str = str(data.get("reward", "5000")).replace(",", "")
+                    reward_val = int(reward_str) if reward_str.isdigit() else 5000
+
+                    redeem_data = {
+                        "action": "giftcode",
+                        "code": code,
+                        "init_data": INIT_DATA
+                    }
+                    r_tele = requests.post(API_URL, headers=headers_telepet, data=redeem_data, timeout=8)
+                    res_tele = r_tele.json()
+
+                    if res_tele.get("ok"):
+                        earned = res_tele.get("amount", reward_val)
+                        total_coins_earned += earned
+                        success_count += 1
+                        log("🎉", f"Task #{tid} (Lượt {round_num}): Mã [{code}] ➔ +{earned:,} Xu đã nạp thành công!", Fore.GREEN)
+                    else:
+                        log("⚠️", f"Task #{tid}: Mã [{code}] ➔ {res_tele.get('error', 'Lỗi nhập')}", Fore.YELLOW)
+            except:
+                pass
+            time.sleep(1)
+
+    log("🏁", f"TỔNG KẾT GIFTCODE: Nhập thành công {success_count} mã | Tổng thu về: +{total_coins_earned:,} Xu!", Fore.GREEN)
+    return total_coins_earned
 
 def is_all_ranking_tasks_completed():
     return (
@@ -288,8 +386,7 @@ def main():
 
             # 👉 SAU KHI LÀM HẾT TẤT CẢ NHIỆM VỤ ➔ BẮT ĐẦU ĐI NHẬP HẾT TOÀN BỘ GIFTCODE
             if not progress.get("giftcode_done"):
-                log("🎁", "TIẾN HÀNH BẺ KHÓA VÀ NHẬP TOÀN BỘ 26 GIFTCODE TELEPET...", Fore.YELLOW)
-                auto_claim_and_redeem_giftcodes(INIT_DATA, API_URL)
+                auto_claim_and_redeem_giftcodes()
                 progress["giftcode_done"] = True
                 curr_u = refresh_profile()
                 print_dashboard(curr_u)
@@ -298,14 +395,13 @@ def main():
             hrs, rem = divmod(sec_to_midnight, 3600)
             mins, secs = divmod(rem, 60)
 
-            log("🌙", f"Đã hoàn thành toàn bộ nhiệm vụ + nhập sạch Giftcode! Cho bot ngủ đến 00:00:05 GMT+7 ngày mai (còn {hrs}h {mins}m {secs}s)...", Fore.MAGENTA)
+            log("🌙", f"Đã xong nhiệm vụ + nhập sạch Giftcode! Cho bot ngủ đến 00:00:05 GMT+7 ngày mai (còn {hrs}h {mins}m {secs}s)...", Fore.MAGENTA)
             print("="*66 + "\n")
 
             time.sleep(sec_to_midnight)
             reset_daily_progress()
             continue
 
-        # Nếu chưa xong hết (chờ hồi 10 phút)
         log("⏳", "Chờ 10 phút hồi Cooldown của Nhiệm Vụ 1-2-3 để làm lượt tiếp theo...", Fore.LIGHTBLACK_EX)
         for remaining in range(600, 0, -10):
             mins, secs = divmod(remaining, 60)

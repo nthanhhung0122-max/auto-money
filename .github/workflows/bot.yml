@@ -1,16 +1,14 @@
-name: Auto Money Bot
+name: Auto TelePet 24/7
 
 on:
-  schedule:
-    # Lịch chạy tự động: Cứ mỗi 15 phút bot sẽ tự động chạy 1 lần
-    - cron: '*/15 * * * *'
-  
-  # Cho phép bạn bấm nút chạy thủ công bất cứ lúc nào trên web GitHub
   workflow_dispatch:
+  schedule:
+    - cron: '0 */5 * * *'
 
 jobs:
   run-bot:
     runs-on: ubuntu-latest
+    timeout-minutes: 350
 
     steps:
       - name: Checkout repository
@@ -19,12 +17,16 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.10'
+          python-version: '3.11'
 
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+          pip install -r requirements.txt
 
       - name: Run script
-        run: python auto_kiemtien.py
+        env:
+          PYTHONUNBUFFERED: "1"
+          TELEGRAM_SESSION_B64: ${{ secrets.TELEGRAM_SESSION_B64 }}
+        run: |
+          python auto_kiemtien.py

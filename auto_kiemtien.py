@@ -1,11 +1,12 @@
 """
 ====================================================================
   🏆 BOT ĐUA TOP XẾP HẠNG TELEGRAM: @kiemtien6789_bot (TÀI KHOẢN 1)
-  🎯 Mục tiêu: 
-      - Tự động nhận diện nhiệm vụ đã hoàn thành ➔ Bỏ qua ngay
-      - Không chờ đợi cooldown nếu đã làm đủ 10 lần
-      - Nhập sạch sẽ toàn bộ 26 GiftCode TelePet (~130,000 Xu)
-      - Ngủ đến 00:00 GMT+7 thức dậy cày tiếp ngày mới
+  🎯 Cơ chế chuẩn:
+      1. Cho ăn, Rương, Quiz, Monetag 1-2-3:
+         ➔ Không nhận được xu / Báo lỗi / Hết lượt ➔ BỎ QUA NGAY (Coi như đã xong)
+      2. KHÔNG BAO GIỜ chờ đếm lùi 10 phút vô ích
+      3. Làm xong hết nhiệm vụ ➔ PHI VÀO CÀO VÀ NẠP SẠCH 26 GIFTCODE NGAY
+      4. Xong hết ➔ Tự ngủ tới 00:00 GMT+7 ngày mai
 ====================================================================
 """
 
@@ -20,11 +21,12 @@ from colorama import Fore, Style, init
 init(autoreset=True)
 
 # ─────────────────────────────────────────────────────────────────
-#  CẤU HÌNH HỆ THỐNG - TÀI KHOẢN 1 (@hungzai22)
+#  CẤU HÌNH HỆ THỐNG - TÀI KHOẢN 1
 # ─────────────────────────────────────────────────────────────────
 
 API_URL = "https://kien.kiemtienngay.us/public/api.php"
 
+# Dán chuỗi init_data Telegram mới nhất của bạn vào đây (nếu có)
 INIT_DATA = (
     "query_id=AAHXiZRNAwAAANeJlE2H47ZQ"
     "&user=%7B%22id%22%3A7744031191%2C%22first_name%22%3A%22uv%E1%BB%B7ctctccc%22%2C"
@@ -101,13 +103,12 @@ def do_feed_tasks():
             progress["feed"] += 1
             log("⚡", f"Cho ăn lần {progress['feed']}/10: +{res.get('earned', 0)} coin", Fore.GREEN)
         else:
-            err = res.get("error", "")
-            log("ℹ️", f"Cho ăn: {err} ➔ Đánh dấu xong!", Fore.YELLOW)
+            err = res.get("error", "Không nhận được xu")
+            log("✅", f"Cho ăn: {err} ➔ Coi như đã đủ 10 lần hôm nay, xong!", Fore.YELLOW)
             progress["feed_done"] = True
             break
         time.sleep(1.5)
-    if progress["feed"] >= 10:
-        progress["feed_done"] = True
+    progress["feed_done"] = True
 
 def do_chest_tasks():
     global progress
@@ -120,13 +121,12 @@ def do_chest_tasks():
             progress["chest"] += 1
             log("🎁", f"Mở rương lần {progress['chest']}/10: +{res.get('earned', 0)} coin", Fore.GREEN)
         else:
-            err = res.get("error", "")
-            log("ℹ️", f"Mở rương: {err} ➔ Đánh dấu xong!", Fore.YELLOW)
+            err = res.get("error", "Không nhận được xu")
+            log("✅", f"Mở rương: {err} ➔ Coi như đã đủ 10 lần hôm nay, xong!", Fore.YELLOW)
             progress["chest_done"] = True
             break
         time.sleep(1.5)
-    if progress["chest"] >= 10:
-        progress["chest_done"] = True
+    progress["chest_done"] = True
 
 def solve_math(q):
     m = re.search(r"(\d+)\s*([\+\-\*])\s*(\d+)", q)
@@ -145,8 +145,8 @@ def do_quiz_tasks():
     for i in range(progress["quiz"], 10):
         q_res = api_call("quiz_get")
         if not q_res.get("ok"):
-            err = q_res.get("error", "")
-            log("ℹ️", f"Câu hỏi: {err} ➔ Đánh dấu xong!", Fore.YELLOW)
+            err = q_res.get("error", "Không lấy được câu hỏi")
+            log("✅", f"Câu hỏi: {err} ➔ Coi như đã đủ 10 lần hôm nay, xong!", Fore.YELLOW)
             progress["quiz_done"] = True
             break
         q_text = q_res.get("question", "")
@@ -163,13 +163,12 @@ def do_quiz_tasks():
             progress["quiz"] += 1
             log("🧠", f"Câu hỏi {progress['quiz']}/10: Chọn {opts[selected_idx]} ✅ (+{a_res.get('earned', 0)} coin)", Fore.GREEN)
         else:
-            err = a_res.get("error", "")
-            log("ℹ️", f"Trả lời: {err} ➔ Đánh dấu xong!", Fore.YELLOW)
+            err = a_res.get("error", "Lỗi trả lời")
+            log("✅", f"Trả lời: {err} ➔ Coi như đã đủ 10 lần hôm nay, xong!", Fore.YELLOW)
             progress["quiz_done"] = True
             break
         time.sleep(1.5)
-    if progress["quiz"] >= 10:
-        progress["quiz_done"] = True
+    progress["quiz_done"] = True
 
 def do_monetag_tasks():
     global progress
@@ -180,10 +179,6 @@ def do_monetag_tasks():
     ]:
         if progress[done_key]:
             continue
-        curr_count = progress[task_key]
-        if curr_count >= 10:
-            progress[done_key] = True
-            continue
         res = api_call(f"task_monetag_{task_key[-1]}")
         if res.get("ok"):
             progress[task_key] += 1
@@ -191,14 +186,11 @@ def do_monetag_tasks():
             if progress[task_key] >= 10:
                 progress[done_key] = True
         else:
-            err = res.get("error", "")
-            # NẾU ĐÃ HẾT LƯỢT HOẶC ĐẠT TỐI ĐA ➔ ĐÁNH DẤU XONG NGAY LẬP TỨC
-            if "tối đa" in err.lower() or "hết" in err.lower() or "10 lần" in err.lower():
-                log("✅", f"{task_name}: Đã đạt tối đa 10/10 lần hôm nay ➔ Bỏ qua!", Fore.GREEN)
-                progress[done_key] = True
-                progress[task_key] = 10
-            elif "chờ" in err.lower() or "10 phút" in err.lower():
-                log("⏳", f"{task_name}: Đang trong thời gian Cooldown.", Fore.LIGHTBLACK_EX)
+            # 👉 BẤT KỂ LỖI GÌ / KHÔNG NHẬN ĐƯỢC XU ➔ COI NHƯ ĐÃ XONG ĐỦ 10 LẦN, BỎ QUA NGAY!
+            err = res.get("error", "Không nhận được xu")
+            log("✅", f"{task_name}: {err} ➔ Coi như đã hoàn thành 10/10 lần, BỎ QUA!", Fore.GREEN)
+            progress[done_key] = True
+            progress[task_key] = 10
         time.sleep(1)
 
 def do_extra_smartlinks():
@@ -328,7 +320,7 @@ def print_dashboard(user):
 ║  🎬 Nhiệm vụ 1 (Monetag): {progress['task1']:>2}/10  {'✅ Xong' if progress['task1_done'] else '⏳ Đang làm'}
 ║  🎬 Nhiệm vụ 2 (Monetag): {progress['task2']:>2}/10  {'✅ Xong' if progress['task2_done'] else '⏳ Đang làm'}
 ║  🎬 Nhiệm vụ 3 (Monetag): {progress['task3']:>2}/10  {'✅ Xong' if progress['task3_done'] else '⏳ Đang làm'}
-║  🎁 Nhập toàn bộ Giftcode:      {'✅ Đã nhập sạch' if progress.get('giftcode_done') else '⏳ Chờ xong 10/10'}
+║  🎁 Nhập toàn bộ Giftcode:      {'✅ Đã nhập sạch' if progress.get('giftcode_done') else '⏳ Đang chờ...'}
 ╠══════════════════════════════════════════════════════════════════╣
 ║  💰 Số dư hiện tại      : {coins:>10,} Coins (~{coins*0.02:,.2f} VNĐ)
 ╚══════════════════════════════════════════════════════════════════╝{Style.RESET_ALL}""")
@@ -347,19 +339,18 @@ def reset_daily_progress():
 def main():
     print(f"""
 {Fore.YELLOW}╔══════════════════════════════════════════════════════════════════╗
-║  🏆 BOT ĐUA TOP XẾP HẠNG 24/7 - FILE GỐC (@hungzai22)            ║
-║  📌 Mục tiêu: Hoàn tất 10 lần Cho ăn, Rương, Quiz, NV 1-2-3     ║
-║  🎁 Xong 10/10 ➔ Tự động bẻ khóa và nhập sạch 26 GiftCode      ║
+║  🏆 BOT ĐUA TOP XẾP HẠNG 24/7 - TỐI ƯU TỐC ĐỘ                     ║
+║  📌 Kiểm tra nhanh: Cho ăn, Rương, Quiz, NV 1-2-3 (Không chờ phí) ║
+║  🎁 Sau đó: Tự động bẻ khóa và nạp sạch 26 GiftCode TelePet      ║
 ║  🌙 Hoàn tất ➔ Ngủ đến 00:00 GMT+7 thức dậy chạy tiếp            ║
 ╚══════════════════════════════════════════════════════════════════╝{Style.RESET_ALL}
     """)
 
-    u = refresh_profile()
-    if not u:
-        log("❌", "Token INIT_DATA không hợp lệ hoặc đã hết hạn!", Fore.RED)
-        return
-
-    log("👤", f"Tài khoản: {u.get('name')} (@{u.get('username')})", Fore.GREEN)
+    curr_u = refresh_profile()
+    if curr_u:
+        log("👤", f"Tài khoản: {curr_u.get('name')} (@{curr_u.get('username')})", Fore.GREEN)
+    else:
+        log("⚠️", "Không thể lấy thông tin tài khoản (Có thể do token Telegram đã cũ, bot vẫn sẽ tiếp tục chạy)", Fore.YELLOW)
 
     while True:
         # 1. Chạy Cho ăn
@@ -371,46 +362,35 @@ def main():
         # 3. Chạy Trả lời câu hỏi
         do_quiz_tasks()
 
-        # 4. Chạy Nhiệm vụ 1, 2, 3 (Monetag)
+        # 4. Chạy Nhiệm vụ 1, 2, 3 (Monetag) - Không nhận được xu là coi như xong ngay
         do_monetag_tasks()
 
-        # 5. Cày phụ Smartlinks trong lúc rảnh
+        # 5. Cày phụ Smartlinks
         do_extra_smartlinks()
 
-        # Cập nhật số dư & In bảng điều khiển
+        # In bảng điều khiển
         curr_u = refresh_profile()
         print_dashboard(curr_u)
 
-        # 6. KIỂM TRA ĐÃ HOÀN THÀNH 10/10 TẤT CẢ CHƯA
-        if is_all_ranking_tasks_completed():
-            print("\n" + "="*66)
-            log("🎉", "CHÚC MỪNG! ĐÃ HOÀN THÀNH 10/10 TẤT CẢ NHIỆM VỤ XẾP HẠNG HÔM NAY!", Fore.GREEN)
-            print("="*66)
+        # 👉 SAU KHI LÀM XONG TOÀN BỘ CÁC BƯỚC TRÊN ➔ LẬP TỨC ĐI CÀO VÀ NHẬP 26 GIFTCODE
+        if not progress.get("giftcode_done"):
+            auto_claim_and_redeem_giftcodes()
+            progress["giftcode_done"] = True
+            curr_u = refresh_profile()
+            print_dashboard(curr_u)
 
-            # 👉 SAU KHI LÀM HẾT TẤT CẢ NHIỆM VỤ ➔ BẮT ĐẦU ĐI NHẬP HẾT TOÀN BỘ GIFTCODE
-            if not progress.get("giftcode_done"):
-                auto_claim_and_redeem_giftcodes()
-                progress["giftcode_done"] = True
-                curr_u = refresh_profile()
-                print_dashboard(curr_u)
+        # TÍNH THỜI GIAN NGỦ ĐẾN 00:00 GMT+7
+        sec_to_midnight = get_seconds_until_midnight_vn()
+        hrs, rem = divmod(sec_to_midnight, 3600)
+        mins, secs = divmod(rem, 60)
 
-            sec_to_midnight = get_seconds_until_midnight_vn()
-            hrs, rem = divmod(sec_to_midnight, 3600)
-            mins, secs = divmod(rem, 60)
+        print("\n" + "="*66)
+        log("🎉", "TẤT CẢ NHIỆM VỤ & GIFTCODE TRONG NGÀY ĐÃ HOÀN TẤT!", Fore.GREEN)
+        log("🌙", f"Cho bot ngủ đến 00:00:05 GMT+7 ngày mai (còn {hrs}h {mins}m {secs}s)...", Fore.MAGENTA)
+        print("="*66 + "\n")
 
-            log("🌙", f"Đã xong nhiệm vụ + nhập sạch Giftcode! Cho bot ngủ đến 00:00:05 GMT+7 ngày mai (còn {hrs}h {mins}m {secs}s)...", Fore.MAGENTA)
-            print("="*66 + "\n")
-
-            time.sleep(sec_to_midnight)
-            reset_daily_progress()
-            continue
-
-        log("⏳", "Chờ 10 phút hồi Cooldown của Nhiệm Vụ 1-2-3 để làm lượt tiếp theo...", Fore.LIGHTBLACK_EX)
-        for remaining in range(600, 0, -10):
-            mins, secs = divmod(remaining, 60)
-            print(f"\r{Fore.CYAN}⏰ Lượt tiếp theo sẽ chạy sau: {mins:02d}:{secs:02d}... {Style.RESET_ALL}", end="", flush=True)
-            time.sleep(10)
-        print("\n")
+        time.sleep(sec_to_midnight)
+        reset_daily_progress()
 
 if __name__ == "__main__":
     try:

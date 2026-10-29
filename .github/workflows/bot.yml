@@ -3,14 +3,23 @@ name: Auto TelePet 24/7
 on:
   workflow_dispatch:
   schedule:
-    - cron: '0 */5 * * *'
+    - cron: '*/15 * * * *'  # Chay du phong
+  workflow_run:
+    workflows: ["Auto TelePet 24/7"]
+    types: [completed]
 
 jobs:
   run-bot:
     runs-on: ubuntu-latest
-    timeout-minutes: 350
+    timeout-minutes: 360
 
     steps:
+      - name: Nghi 1 phut neu duoc kich hoat sau khi lan truoc huy/tat
+        if: github.event_name == 'workflow_run'
+        run: |
+          echo "Lan chay truoc vua ket thuc hoac huy, nghi 60 giay roi tu dong bat lai..."
+          sleep 60
+
       - name: Checkout repository
         uses: actions/checkout@v4
 
@@ -22,11 +31,15 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt
+          pip install requests telethon colorama beautifulsoup4
 
-      - name: Run script
+      - name: Run script (Tu dong chay lai sau 1 phut neu code tat)
         env:
           PYTHONUNBUFFERED: "1"
-          TELEGRAM_SESSION_B64: ${{ secrets.TELEGRAM_SESSION_B64 }}
+          PYTHONIOENCODING: "utf-8"
         run: |
-          python auto_kiemtien.py
+          while true; do
+            python auto_kiemtien.py
+            echo "Code vua ket thuc, nghi 60 giay roi tu dong khoi dong lai..."
+            sleep 60
+          done

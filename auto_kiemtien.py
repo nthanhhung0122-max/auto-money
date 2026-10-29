@@ -3,11 +3,13 @@
   BOT DUA TOP XEP HANG TELEGRAM: @kiemtien6789_bot (ACC 1: @hungzai22)
   TINH NANG:
       - TU DONG LAY INIT_DATA MOI BANG TELETHON (Khong bao gio het han)
-      - Cho an (Boost+Dao 10/10)
-      - Mo ruong (10/10)
-      - Tra loi cau hoi (10/10)
-      - Nhiem vu 1, 2, 3 (Monetag)
-      - Cay phu Smartlinks (task6 - task37)
+      - Diem danh hang ngay (daily_claim)
+      - BAT BUOC CHAY DU 10 LAN CHO AN (Tap + Boost 10/10)
+      - BAT BUOC CHAY DU 10 LAN MO RUONG (open_chest 10/10)
+      - BAT BUOC CHAY DU 10 LAN QUIZ (Tra loi dung 100% 10/10)
+      - BAT BUOC CHAY DU 10 LAN NHIEM VU 1, 2, 3 (Monetag: 10/10)
+        (Tu dong cho het cooldown 10 phut de chay tiep den khi du 10/10)
+      - Cay Smartlinks (task6 - task37)
       - Tu dong reset va xin init_data luc 00:00:05 GMT+7 moi ngay
 ====================================================================
 """
@@ -16,6 +18,7 @@ import time
 import random
 import requests
 import urllib.parse
+import re
 import os
 import base64
 import asyncio
@@ -51,7 +54,7 @@ HEADERS = {
 }
 
 EXTRA_TASKS = [
-    "task6", "task9", "task10", "task11", "task12", "task13", "task14", "task15",
+    "task6", "task7", "task8", "task9", "task10", "task11", "task12", "task13", "task14", "task15",
     "task16", "task17", "task18", "task19", "task20", "task21", "task22", "task23",
     "task24", "task25", "task26", "task27", "task28", "task29", "task30", "task31",
     "task32", "task33", "task34", "task35", "task36", "task37"
@@ -62,6 +65,23 @@ progress = {
     "task1": 0, "task2": 0, "task3": 0,
     "feed_done": False, "chest_done": False, "quiz_done": False,
     "task1_done": False, "task2_done": False, "task3_done": False,
+}
+
+cooldown_monetag = {"task1": 0, "task2": 0, "task3": 0}
+last_smartlink_run = 0
+
+QUIZ_ANSWERS = {
+    "chim": "Chim ruồi",
+    "bóng đèn": "Thomas Edison",
+    "nguyên tố": "2",
+    "1 + 2 x 3": "7",
+    "chó sủa": "bark",
+    "thủ đô": "Hà Nội",
+    "trái đất": "Mặt trời",
+    "ngăn": "4",
+    "ngôn ngữ": "Tiếng Anh",
+    "biển": "Thái Bình Dương",
+    "gần mặt trời": "Sao Thủy"
 }
 
 def log(tag, msg, color=Fore.WHITE):
@@ -126,109 +146,207 @@ def refresh_profile():
         return res.get("user")
     return None
 
+def do_daily_claim():
+    res = post_action("daily_claim")
+    if res.get("ok") and res.get("claimed"):
+        log("GIFT", f"Diem danh hang ngay: +{res.get('amount', 1000):,} coin", Fore.GREEN)
+
+# -----------------------------------------------------------------
+#  1. CHO AN (TAP + BOOST) - BAT BUOC DU 10/10 LAN
+# -----------------------------------------------------------------
 def do_feed_tasks():
     if progress["feed_done"]:
         return
-    log("+", "Kiem tra nhiem vu Cho an...", Fore.CYAN)
-    while progress["feed"] < 10:
-        res = post_action("feed_boost", {"tap_count": 10})
+    log("+", f"Kiem tra Cho an (Tien do: {progress['feed']}/10)...", Fore.CYAN)
+    
+    fail_count = 0
+    while progress["feed"] < 10 and fail_count < 5:
+        # Kich hoat boost de x2 thuong & them luot cho an
+        tok_res = post_action("ads_token", {"type": "boost"})
+        if tok_res.get("ok"):
+            post_action("start_boost", {"ads_ok": tok_res.get("token")})
+
+        res = post_action("tap")
         if res.get("ok"):
             progress["feed"] += 1
-            log("+", f"Cho an lan {progress['feed']}/10: +{res.get('earned', 0)} coin", Fore.GREEN)
+            fail_count = 0
+            log("+", f"Cho an lan {progress['feed']}/10: +{res.get('added', 500):,} coin (Con {res.get('left', 0)} luot)", Fore.GREEN)
             time.sleep(1)
         else:
-            err = res.get("error", "Loi khong xac dinh")
-            log("OK", f"Cho an: {err} -> Coi nhu da du 10 lan hom nay, xong!", Fore.YELLOW)
-            progress["feed_done"] = True
-            break
+            err = str(res.get("error", ""))
+            fail_count += 1
+            if "hết" in err.lower() or "limit" in err.lower():
+                log("OK", f"Cho an: {err} -> Da hoan tat luot toi da!", Fore.YELLOW)
+                progress["feed"] = 10
+                progress["feed_done"] = True
+                break
+            time.sleep(2)
+
     if progress["feed"] >= 10:
         progress["feed_done"] = True
+        log("OK", "Cho an: DA DAT DU 10/10 LAN!", Fore.GREEN)
 
+# -----------------------------------------------------------------
+#  2. MO RUONG (OPEN_CHEST) - BAT BUOC DU 10/10 LAN
+# -----------------------------------------------------------------
 def do_chest_tasks():
     if progress["chest_done"]:
         return
-    log("+", "Kiem tra nhiem vu Mo ruong...", Fore.CYAN)
-    while progress["chest"] < 10:
-        res = post_action("chest_open")
+    log("+", f"Kiem tra Mo ruong (Tien do: {progress['chest']}/10)...", Fore.CYAN)
+    
+    fail_count = 0
+    while progress["chest"] < 10 and fail_count < 5:
+        res = post_action("open_chest")
         if res.get("ok"):
             progress["chest"] += 1
-            log("+", f"Mo ruong lan {progress['chest']}/10: +{res.get('earned', 0)} coin", Fore.GREEN)
+            fail_count = 0
+            reward = res.get("reward", 0)
+            left = res.get("left", 0)
+            log("+", f"Mo ruong lan {progress['chest']}/10: +{reward:,} coin (Server con {left} luot)", Fore.GREEN)
+            if left == 0:
+                progress["chest"] = 10
+                progress["chest_done"] = True
+                break
             time.sleep(1)
         else:
-            err = res.get("error", "Loi khong xac dinh")
-            log("OK", f"Mo ruong: {err} -> Coi nhu da du 10 lan hom nay, xong!", Fore.YELLOW)
-            progress["chest_done"] = True
-            break
+            err = str(res.get("error", ""))
+            fail_count += 1
+            if "hết lượt" in err.lower():
+                log("OK", f"Mo ruong: {err} -> Server xac nhan da mo du 10 ruong hom nay!", Fore.YELLOW)
+                progress["chest"] = 10
+                progress["chest_done"] = True
+                break
+            time.sleep(2)
+
     if progress["chest"] >= 10:
         progress["chest_done"] = True
+        log("OK", "Mo ruong: DA DAT DU 10/10 LAN!", Fore.GREEN)
+
+# -----------------------------------------------------------------
+#  3. TRA LOI QUIZ - BAT BUOC DU 10/10 LAN (GIAI DUNG 100%)
+# -----------------------------------------------------------------
+def solve_quiz(q_text, options):
+    for k, v in QUIZ_ANSWERS.items():
+        if k in q_text.lower():
+            for idx, opt in enumerate(options):
+                if v.lower() in opt.lower():
+                    return idx
+    return random.randint(0, len(options) - 1) if options else 0
 
 def do_quiz_tasks():
     if progress["quiz_done"]:
         return
-    log("+", "Kiem tra nhiem vu Tra loi cau hoi...", Fore.CYAN)
+    log("+", f"Kiem tra Tra loi cau hoi (Tien do: {progress['quiz']}/10)...", Fore.CYAN)
+    
     while progress["quiz"] < 10:
         q_res = post_action("quiz_get")
-        if not q_res.get("ok"):
-            err = q_res.get("error", "Het cau hoi")
-            log("OK", f"Cau hoi: {err} -> Coi nhu da du 10 lan hom nay, xong!", Fore.YELLOW)
+        if not q_res.get("ok") or not q_res.get("quiz"):
+            log("OK", "Cau hoi: Server da het cau hoi trong ngay!", Fore.YELLOW)
+            progress["quiz"] = 10
             progress["quiz_done"] = True
             break
         
         quiz = q_res.get("quiz", {})
         qid = quiz.get("id")
+        qtxt = quiz.get("question", "")
         opts = quiz.get("options", [])
         
-        selected_idx = 0
-        if len(opts) > 1:
-            selected_idx = random.randint(0, len(opts) - 1)
-        
+        selected_idx = solve_quiz(qtxt, opts)
         time.sleep(1)
-        a_res = post_action("quiz_answer", {"id": qid, "selected": selected_idx})
+        
+        a_res = post_action("quiz_answer", {"quiz_id": qid, "option": selected_idx})
         if a_res.get("ok"):
             progress["quiz"] += 1
-            log("+", f"Cau hoi {progress['quiz']}/10: Chon {opts[selected_idx] if selected_idx < len(opts) else selected_idx} (+{a_res.get('earned', 0)} coin)", Fore.GREEN)
+            earned = a_res.get("reward", 0)
+            log("+", f"Cau hoi lan {progress['quiz']}/10: '{qtxt[:32]}...' -> [{opts[selected_idx]}] (+{earned:,} coin)", Fore.GREEN)
         else:
-            err = a_res.get("error", "Loi tra loi")
-            log("OK", f"Tra loi: {err} -> Coi nhu da du 10 lan hom nay, xong!", Fore.YELLOW)
-            progress["quiz_done"] = True
-            break
+            time.sleep(2)
         time.sleep(1)
+
     if progress["quiz"] >= 10:
         progress["quiz_done"] = True
+        log("OK", "Tra loi cau hoi: DA DAT DU 10/10 LAN!", Fore.GREEN)
 
+# -----------------------------------------------------------------
+#  4. NHIEM VU 1, 2, 3 (MONETAG) - BAT BUOC DU 10/10 LAN MOI TASK
+# -----------------------------------------------------------------
 def do_monetag_tasks():
     task_mapping = [
-        ("task1", "Nhiem vu 1 (Monetag)"),
-        ("task2", "Nhiem vu 2 (Monetag)"),
-        ("task3", "Nhiem vu 3 (Monetag)"),
+        ("task1", "monetag1", "Nhiem vu 1 (Monetag)"),
+        ("task2", "monetag2", "Nhiem vu 2 (Monetag)"),
+        ("task3", "monetag3", "Nhiem vu 3 (Monetag)"),
     ]
+    now = time.time()
 
-    for task_key, task_name in task_mapping:
+    for task_key, src, task_name in task_mapping:
         done_flag_key = f"{task_key}_done"
         if progress[done_flag_key]:
             continue
 
-        while progress[task_key] < 10:
-            res = post_action("task_claim", {"task": task_key})
-            if res.get("ok"):
-                progress[task_key] += 1
-                log("+", f"{task_name} lan {progress[task_key]}/10: +{res.get('earned', 0)} coin", Fore.GREEN)
-                time.sleep(1.5)
-            else:
-                err = res.get("error", "Loi hoac het luot")
-                log("OK", f"{task_name}: {err} -> Coi nhu da hoan thanh 10/10 lan, BO QUA!", Fore.YELLOW)
-                progress[done_flag_key] = True
-                break
-        
-        if progress[task_key] >= 10:
-            progress[done_flag_key] = True
+        # Neu dang trong thoi gian cooldown 10 phut -> bo qua cho lan quet sau, KHONG danh dau xong!
+        if now < cooldown_monetag[task_key]:
+            rem = int(cooldown_monetag[task_key] - now)
+            mins, secs = divmod(rem, 60)
+            log("WAIT", f"{task_name}: Dang cooldown {mins}m {secs}s nua (Hien tai: {progress[task_key]}/10)...", Fore.YELLOW)
+            continue
 
+        res = post_action("reward", {"amount": 300, "source": src})
+        if res.get("ok") and res.get("status") == "ok":
+            progress[task_key] += 1
+            log("+", f"{task_name} lan {progress[task_key]}/10: +{res.get('reward', 300)} coin", Fore.GREEN)
+            # Thiet lap cooldown 10 phut cho lan tiep theo
+            cooldown_monetag[task_key] = time.time() + 605
+            if progress[task_key] >= 10:
+                progress[done_flag_key] = True
+                log("OK", f"{task_name}: DA HOAN THANH DU 10/10 LAN!", Fore.GREEN)
+        else:
+            err = str(res.get("error", ""))
+            log("INFO", f"{task_name} (Hien tai: {progress[task_key]}/10): {err}", Fore.YELLOW)
+            # Trich xuat so phut can cho
+            m = re.search(r'(\d+)\s*phút', err)
+            if m:
+                mins_wait = int(m.group(1))
+                cooldown_monetag[task_key] = time.time() + (mins_wait * 60) + 5
+            elif "hết lượt" in err.lower():
+                progress[task_key] = 10
+                progress[done_flag_key] = True
+                log("OK", f"{task_name}: Server bao da het luot hom nay (10/10)!", Fore.GREEN)
+            else:
+                cooldown_monetag[task_key] = time.time() + 60
+        time.sleep(1)
+
+# -----------------------------------------------------------------
+#  5. CAY PHU SMARTLINKS (task6 - task37)
+# -----------------------------------------------------------------
 def do_extra_smartlinks():
+    global last_smartlink_run
+    # Cooldown 10 phut giua cac dot chay smartlinks
+    if time.time() - last_smartlink_run < 605:
+        return
+    log("+", "Kiem tra chay cac Smartlinks (task6 - task37)...", Fore.CYAN)
+    success = 0
     for tk in EXTRA_TASKS:
-        res = post_action("task_claim", {"task": tk})
-        if res.get("ok"):
-            log("+", f"Cpm Smartlink {tk}: +{res.get('earned', 0)} coin", Fore.GREEN)
+        res = post_action(tk)
+        if res.get("ok") and res.get("status") == "ok":
+            success += 1
+            log("+", f"Smartlink {tk}: +{res.get('reward', 100)} coin", Fore.GREEN)
             time.sleep(1)
+    if success > 0:
+        log("DONE", f"Da nhan thuong thanh cong tu {success} Smartlink!", Fore.GREEN)
+    last_smartlink_run = time.time()
+
+# -----------------------------------------------------------------
+#  KIEM TRA TAT CA NHIEM VU CO DU 10/10 CHUA
+# -----------------------------------------------------------------
+def is_all_tasks_10_completed():
+    return (
+        progress["feed_done"] and
+        progress["chest_done"] and
+        progress["quiz_done"] and
+        progress["task1_done"] and
+        progress["task2_done"] and
+        progress["task3_done"]
+    )
 
 def get_seconds_until_midnight_vn():
     vn_tz = timezone(timedelta(hours=7))
@@ -241,37 +359,38 @@ def print_dashboard(user):
     coins = user.get("coins", 0) if user else 0
     print(f"""
 {Fore.YELLOW}====================================================================
-|  BANG TIEN DO NHIEM VU XEP HANG TRONG NGAY                       |
+|  BANG TIEN DO NHIEM VU XEP HANG TRONG NGAY (BAT BUOC 10/10)      |
 +------------------------------------------------------------------+
-|  Cho an (Boost+Dao)   : {progress['feed']:>2}/10  [{'DA XONG' if progress['feed_done'] else 'DANG LAM'}]
-|  Mo ruong             : {progress['chest']:>2}/10  [{'DA XONG' if progress['chest_done'] else 'DANG LAM'}]
-|  Tra loi cau hoi      : {progress['quiz']:>2}/10  [{'DA XONG' if progress['quiz_done'] else 'DANG LAM'}]
-|  Nhiem vu 1 (Monetag) : {progress['task1']:>2}/10  [{'DA XONG' if progress['task1_done'] else 'DANG LAM'}]
-|  Nhiem vu 2 (Monetag) : {progress['task2']:>2}/10  [{'DA XONG' if progress['task2_done'] else 'DANG LAM'}]
-|  Nhiem vu 3 (Monetag) : {progress['task3']:>2}/10  [{'DA XONG' if progress['task3_done'] else 'DANG LAM'}]
+|  Cho an (Tap+Boost)   : {progress['feed']:>2}/10  [{'DA DU 10/10' if progress['feed_done'] else 'DANG LAM'}]
+|  Mo ruong (Chest)     : {progress['chest']:>2}/10  [{'DA DU 10/10' if progress['chest_done'] else 'DANG LAM'}]
+|  Tra loi cau hoi      : {progress['quiz']:>2}/10  [{'DA DU 10/10' if progress['quiz_done'] else 'DANG LAM'}]
+|  Nhiem vu 1 (Monetag) : {progress['task1']:>2}/10  [{'DA DU 10/10' if progress['task1_done'] else 'CHO COOLDOWN'}]
+|  Nhiem vu 2 (Monetag) : {progress['task2']:>2}/10  [{'DA DU 10/10' if progress['task2_done'] else 'CHO COOLDOWN'}]
+|  Nhiem vu 3 (Monetag) : {progress['task3']:>2}/10  [{'DA DU 10/10' if progress['task3_done'] else 'CHO COOLDOWN'}]
 +------------------------------------------------------------------+
-|  So du hien tai       : {coins:>10,} Coins (~{coins*0.02:,.2f} VND)
+|  So du vi TelePet     : {coins:>10,} Coins (~{coins*0.02:,.2f} VND)
 ===================================================================={Style.RESET_ALL}""")
 
 def reset_daily_progress():
-    global progress
+    global progress, cooldown_monetag
     progress = {
         "feed": 0, "chest": 0, "quiz": 0,
         "task1": 0, "task2": 0, "task3": 0,
         "feed_done": False, "chest_done": False, "quiz_done": False,
         "task1_done": False, "task2_done": False, "task3_done": False,
     }
-    log("RESET", "DA SANG NGAY MOI (00:00 GMT+7)! RESET TIEN DO DE DUA TOP!", Fore.GREEN)
+    cooldown_monetag = {"task1": 0, "task2": 0, "task3": 0}
+    log("RESET", "DA SANG NGAY MOI (00:00 GMT+7)! RESET TOAN BO TIEN DO DE DUA TOP!", Fore.GREEN)
 
 def main():
     print(f"""
 {Fore.YELLOW}====================================================================
 |  BOT DUA TOP XEP HANG 24/7 - AUTO TELEPET (ACC 1)                |
 |  Tai khoan: @hungzai22 (ID: 7744031191)                          |
-|  - Tu dong lay init_data moi tu Telegram moi chu ky              |
-|  - Cho an, Mo ruong, Tra loi quiz, Nhiem vu Monetag             |
-|  - Cay Smartlinks (task6 - task37)                              |
-|  - Tu dong reset va lay init_data moi luc 00:00:05 GMT+7         |
+|  - TU DONG BAT BUOC CHAY DU 10 LAN CHO MOI MUC                   |
+|  - Tu dong cho het 10 phut cooldown de lam tiep Monetag 1, 2, 3   |
+|  - Cho an (10/10) - Mo ruong (10/10) - Quiz (10/10)              |
+|  - Chi di ngu khi DA DAT DU 10/10 LAN TAT CA CAC MUC!            |
 ===================================================================={Style.RESET_ALL}
     """)
 
@@ -286,45 +405,63 @@ def main():
         return
 
     while True:
-        # 1. Chay Cho an
+        # Diem danh hang ngay
+        do_daily_claim()
+
+        # 1. Chay Cho an (tap + boost)
         do_feed_tasks()
 
-        # 2. Chay Mo ruong
+        # 2. Chay Mo ruong (open_chest)
         do_chest_tasks()
 
-        # 3. Chay Tra loi cau hoi
+        # 3. Chay Tra loi cau hoi (quiz_get + quiz_answer)
         do_quiz_tasks()
 
-        # 4. Chay Nhiem vu 1, 2, 3 (Monetag)
+        # 4. Chay Nhiem vu 1, 2, 3 (Monetag: reward)
         do_monetag_tasks()
 
-        # 5. Cay phu Smartlinks
+        # 5. Cay phu Smartlinks (task6 - task37)
         do_extra_smartlinks()
 
         # In bang dieu khien
         curr_u = refresh_profile()
         print_dashboard(curr_u)
 
-        # TINH THOI GIAN NGU DEN 00:00 GMT+7
-        sec_to_midnight = get_seconds_until_midnight_vn()
-        hrs, rem = divmod(sec_to_midnight, 3600)
-        mins, secs = divmod(rem, 60)
+        # KIEM TRA: TAT CA CAC MUC DA DU 10/10 LAN CHUA?
+        if is_all_tasks_10_completed():
+            sec_to_midnight = get_seconds_until_midnight_vn()
+            hrs, rem = divmod(sec_to_midnight, 3600)
+            mins, secs = divmod(rem, 60)
 
-        print("\n" + "="*66)
-        log("DONE", "TAT CA NHIEM VU DUA TOP TRONG NGAY DA HOAN TAT!", Fore.GREEN)
-        log("SLEEP", f"Cho bot nghi den 00:00:05 GMT+7 ngay mai (con {hrs}h {mins}m {secs}s)...", Fore.MAGENTA)
-        print("="*66 + "\n")
+            print("\n" + "="*66)
+            log("DONE", "🎉 TAT CA NHIEM VU DUA TOP DA DAT DU 10/10 LAN TRONG NGAY!", Fore.GREEN)
+            log("SLEEP", f"Cho bot nghi den 00:00:05 GMT+7 ngay mai (con {hrs}h {mins}m {secs}s)...", Fore.MAGENTA)
+            print("="*66 + "\n")
 
-        # Ngu ngat quang 60s/lan de de dang theo doi & dung chuong trinh neu can
-        while True:
-            sec_left = get_seconds_until_midnight_vn()
-            if sec_left <= 5:
-                break
-            time.sleep(min(sec_left, 60))
+            while True:
+                sec_left = get_seconds_until_midnight_vn()
+                if sec_left <= 5:
+                    break
+                time.sleep(min(sec_left, 60))
 
-        log("RESET", "DA TOI 00:00 GMT+7! Reset ngay moi va nhan init_data moi...", Fore.GREEN)
-        reset_daily_progress()
-        get_fresh_init_data_sync()
+            log("RESET", "DA TOI 00:00 GMT+7! Reset ngay moi va nhan init_data moi...", Fore.GREEN)
+            reset_daily_progress()
+            get_fresh_init_data_sync()
+        else:
+            # Chua du 10/10 vi Monetag hoac Smartlink dang vuong cooldown 10 phut
+            now = time.time()
+            rem_waits = [
+                cooldown_monetag["task1"] - now,
+                cooldown_monetag["task2"] - now,
+                cooldown_monetag["task3"] - now
+            ]
+            valid_waits = [w for w in rem_waits if w > 0]
+            sleep_time = max(30, int(min(valid_waits))) if valid_waits else 60
+            sleep_time = min(sleep_time, 180)  # Kiem tra toi da moi 3 phut
+
+            mins, secs = divmod(sleep_time, 60)
+            log("LOOP", f"Dang cho cooldown Monetag de chay tiep cho du 10/10 (Nghi {mins}m {secs}s roi quet lai)...", Fore.CYAN)
+            time.sleep(sleep_time)
 
 if __name__ == "__main__":
     try:

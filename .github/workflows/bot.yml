@@ -1,38 +1,36 @@
-name: Auto Nhiem Vu TelePet 24/7
+name: Auto TelePet 24/7
 
 on:
   workflow_dispatch:
   schedule:
-    - cron: '10 17 * * *'  # 00:10 GMT+7 mỗi ngày
-  workflow_run:
-    workflows: ["Auto Nhiem Vu TelePet 24/7"]
-    types: [completed]
+    - cron: '*/30 * * * *'
 
 jobs:
-  run-daily:
+  run-bot:
     runs-on: ubuntu-latest
     timeout-minutes: 360
-    steps:
-      - name: Nghi 1 phut neu duoc bat lai
-        if: github.event_name == 'workflow_run'
-        run: |
-          echo "Nghi 60 giay truoc khi chay..."
-          sleep 60
 
-      - name: Checkout repository
+    steps:
+      - name: Checkout ma nguon
         uses: actions/checkout@v4
 
-      - name: Set up Python
+      - name: Cai dat Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.10'
-          cache: 'pip'
+          python-version: '3.11'
 
-      - name: Install dependencies
+      - name: Cai dat thu vien
         run: |
           python -m pip install --upgrade pip
           pip install requests telethon colorama
 
-      - name: Chay Bot Nhiem Vu
+      - name: Chay Bot (Neu dung thi 1 phut sau tu dong bat lai)
+        env:
+          PYTHONUNBUFFERED: "1"
+          PYTHONIOENCODING: "utf-8"
         run: |
-          python auto_kiemtien.py
+          while true; do
+            python auto_kiemtien.py
+            echo "Code vua tat, cho dung 60 giay roi tu dong bat lai..."
+            sleep 60
+          done

@@ -333,7 +333,7 @@ def sleep_until_midnight():
     hrs, rem = divmod(sec_to_midnight, 3600)
     mins, secs = divmod(rem, 60)
     print("\n" + "="*66)
-    log("LIMIT", f"Tai khoan da dat gioi han GiftCode hom nay (locked=2)!", Fore.YELLOW)
+    log("LIMIT", f"Tai khoan da dat gioi han GiftCode hom nay (locked=12)!", Fore.YELLOW)
     log("SLEEP", f"Bot se ngu {hrs}h {mins}p {secs}s cho den 00:00:05 GMT+7 de tu dong reset ngay moi...", Fore.MAGENTA)
     print("="*66 + "\n")
 

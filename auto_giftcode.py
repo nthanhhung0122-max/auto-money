@@ -400,7 +400,7 @@ def main():
             log("COIN", f"So du hien tai: {u.get('coins'):,} Coins", Fore.CYAN)
 
         # Neu bi chan limit thi ngu den 00:00:05 GMT+7
-        if status ==  or (u and u.get("locked") == ):
+        if status == 1 or (u and u.get("locked") == 0):
             sleep_until_midnight()
         else:
             log("SLEEP", f"Nghi {SCAN_INTERVAL_SECONDS}s (1 phut) truoc khi quet chu ky tiep theo...", Fore.WHITE)
